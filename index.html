@@ -1,0 +1,2586 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shazam — Interactive 3D Web Infographic</title>
+
+  <!-- ES Module Import Map for Native Browser Execution & Vite Compatibility -->
+  <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.174.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.174.0/examples/jsm/",
+          "gsap": "https://unpkg.com/gsap@3.12.7/index.js"
+        }
+      }
+    </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;700&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    body,
+    html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #030308;
+      font-family: 'Outfit', sans-serif;
+      color: #ffffff;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* 1. Start Screen Overlay (#startScreen) */
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at center, rgba(3, 8, 18, 0.35) 0%, rgba(2, 5, 11, 0.75) 100%);
+      backdrop-filter: blur(2px);
+      font-family: 'Roboto Mono', monospace;
+      transition: opacity 0.8s ease, visibility 0.8s ease;
+      overflow: hidden;
+    }
+
+    #startScreen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .start-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      max-width: 780px;
+      padding: 0 24px;
+    }
+
+    .start-title {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 2.25rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+    }
+
+    .start-subtitle {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #00f0ff;
+      letter-spacing: 0.02em;
+      margin-bottom: 24px;
+    }
+
+    .start-subtitle .accent-purple {
+      color: #b545ff;
+    }
+
+    .start-divider {
+      width: 100%;
+      max-width: 620px;
+      height: 1.5px;
+      background-color: #00f0ff;
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.7), 0 0 4px #00f0ff;
+      margin-bottom: 32px;
+    }
+
+    .start-description {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.95rem;
+      font-weight: 500;
+      line-height: 1.7;
+      color: #00e5ff;
+      max-width: 640px;
+      margin-bottom: 44px;
+      text-align: center;
+    }
+
+    .start-cta-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(8, 14, 26, 0.92);
+      border: 2px solid #00f0ff;
+      border-radius: 40px;
+      padding: 5px 6px 5px 36px;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), inset 0 0 12px rgba(0, 240, 255, 0.15);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      text-decoration: none;
+      outline: none;
+    }
+
+    .start-cta-btn:hover {
+      background: rgba(12, 22, 40, 0.98);
+      border-color: #ffffff;
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.8), inset 0 0 20px rgba(0, 240, 255, 0.3);
+      transform: scale(1.05);
+    }
+
+    .cta-text {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 0.18em;
+      margin-right: 18px;
+      text-transform: uppercase;
+    }
+
+    .cta-logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      object-fit: cover;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
+      display: block;
+    }
+
+    /* 2. World-Space HTML Anchors Overlay Layer (#anchors-layer) */
+    #anchors-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .node-anchor {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform: translate3d(0, 0, 0);
+      will-change: transform, opacity;
+      transition: opacity 0.4s ease;
+    }
+
+    .anchor-ring {
+      position: absolute;
+      top: -16px;
+      left: -16px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+      animation: pulseRing 3s infinite ease-in-out;
+      pointer-events: none;
+      transition: border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .node-anchor.locked .anchor-ring {
+      border-color: rgba(0, 150, 255, 0.15);
+      box-shadow: none;
+      animation: none;
+    }
+
+    @keyframes pulseRing {
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: 0.4;
+      }
+
+      50% {
+        transform: scale(1.3);
+        opacity: 0.85;
+      }
+    }
+
+    .anchor-label {
+      /* Visually hidden for clean mockup screenshots while preserving DOM structure & node data */
+      display: none !important;
+      position: absolute;
+      left: 24px;
+      top: -14px;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      background: rgba(5, 12, 24, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      border-left: 3px solid #00e5ff;
+      padding: 6px 14px;
+      border-radius: 4px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: scale(0.95) translateX(-6px);
+    }
+
+    .node-content-container {
+      position: absolute;
+      left: 24px;
+      top: 30px;
+      width: 360px;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateY(12px);
+    }
+
+    .node-anchor.locked .anchor-label,
+    .node-anchor.locked .node-content-container {
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.9) translateX(-10px);
+      pointer-events: none;
+    }
+
+    .node-anchor.active .anchor-label {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      background: rgba(0, 229, 255, 0.15);
+      border-color: #00ffff;
+      border-left: 3px solid #ffffff;
+      box-shadow: 0 0 25px rgba(0, 229, 255, 0.6);
+      transform: scale(1.05) translateX(0px);
+    }
+
+    .node-anchor.active .node-content-container {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .node-num {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 0.8rem;
+      color: #00e5ff;
+      letter-spacing: 0.05em;
+    }
+
+    .node-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #e2e8f0;
+    }
+
+    /* 3. Conclusion CTA (#conclusionCTA) */
+    #conclusionCTA {
+      position: absolute;
+      right: 32px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      z-index: 25;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border: 2px solid #475569;
+      background: rgba(15, 23, 42, 0.6);
+      cursor: not-allowed;
+      opacity: 0.5;
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: auto;
+    }
+
+    /* Unlocked Cyan Active State for Conclusion CTA */
+    #conclusionCTA.unlocked {
+      border-color: #00e5ff;
+      background: rgba(0, 229, 255, 0.15);
+      cursor: pointer;
+      opacity: 1;
+      pointer-events: auto;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+      animation: pulseCTA 2.5s infinite ease-in-out;
+    }
+
+    #conclusionCTA.unlocked:hover {
+      background: rgba(0, 229, 255, 0.35);
+      border-color: #ffffff;
+      box-shadow: 0 0 35px rgba(0, 229, 255, 0.8);
+      transform: translateY(-50%) scale(1.15);
+    }
+
+    @keyframes pulseCTA {
+
+      0%,
+      100% {
+        box-shadow: 0 0 15px rgba(0, 229, 255, 0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 30px rgba(0, 229, 255, 0.8);
+      }
+    }
+
+    .cta-inner-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #475569;
+      transition: background-color 0.4s ease;
+    }
+
+    #conclusionCTA.unlocked .cta-inner-dot {
+      background-color: #00e5ff;
+      box-shadow: 0 0 10px #00e5ff;
+    }
+
+    /* 4. Conclusion Panel Container (#conclusionPanel) */
+    #conclusionPanel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.95);
+      width: 85%;
+      max-width: 960px;
+      height: 70%;
+      max-height: 580px;
+      background: rgba(5, 12, 24, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 12px;
+      z-index: 40;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 229, 255, 0.15);
+      display: flex;
+      flex-direction: column;
+      padding: 32px;
+    }
+
+    #conclusionPanel.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+    }
+
+    .panel-close-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+
+    .panel-close-btn:hover {
+      color: #00e5ff;
+    }
+
+    /* Content Anchor for Future HTML/CSS Content Overlay */
+    #conclusionContentAnchor {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding-top: 24px;
+    }
+
+    /* 5. OVERVIEW HTML/CSS Interface Overlay (#overviewUI) */
+    #overviewUI {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 20;
+      pointer-events: none;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+
+    #overviewUI.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .overview-bottom-header {
+      position: absolute;
+      bottom: 44px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .overview-title {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+
+    .overview-subtitle {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #00f0ff;
+      letter-spacing: 0.02em;
+    }
+
+    .overview-subtitle .accent-purple {
+      color: #b545ff;
+    }
+
+    /* Node 1 Label Pill Card Anchor */
+    .overview-node-card {
+      position: absolute;
+      top: 0;
+      left: 0;
+      will-change: transform, opacity;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .overview-node-card.visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .overview-node-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(8, 14, 26, 0.92);
+      border: 2px solid #00f0ff;
+      border-radius: 40px;
+      padding: 8px 24px;
+      cursor: pointer;
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.4), inset 0 0 10px rgba(0, 240, 255, 0.15);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: auto;
+      text-decoration: none;
+      outline: none;
+    }
+
+    .overview-node-btn:hover {
+      background: rgba(12, 22, 40, 0.98);
+      border-color: #ffffff;
+      box-shadow: 0 0 28px rgba(0, 240, 255, 0.8), inset 0 0 16px rgba(0, 240, 255, 0.3);
+      transform: scale(1.05);
+    }
+
+    .overview-node-btn .btn-text {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .overview-node-btn .btn-arrow {
+      color: #00f0ff;
+      stroke-width: 2.5;
+      transition: transform 0.3s ease, color 0.3s ease;
+    }
+
+    .overview-node-btn:hover .btn-arrow {
+      color: #ffffff;
+      transform: translateX(4px);
+    }
+
+    /* 6. Contextual HUD Infographic Cards (.nucleo-card) */
+    .nucleo-card {
+      position: absolute;
+      left: -880px;
+      top: -280px;
+      width: 880px;
+      background: rgba(3, 10, 20, 0.94);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 2px solid #00f0ff;
+      border-radius: 16px;
+      box-shadow: 0 0 45px rgba(0, 240, 255, 0.35), inset 0 0 25px rgba(0, 240, 255, 0.15);
+      padding: 34px 38px;
+      font-family: 'Roboto Mono', monospace;
+      color: #ffffff;
+      z-index: 30;
+      pointer-events: auto;
+    }
+
+    .nucleo-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .nucleo-header-title {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: #00f0ff;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .nucleo-header-line {
+      width: 100%;
+      height: 2px;
+      background: rgba(0, 240, 255, 0.5);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+      margin-bottom: 26px;
+    }
+
+    .n1-description {
+      font-size: 1.18rem;
+      font-weight: 400;
+      line-height: 1.7;
+      color: #00e5ff;
+      margin-bottom: 26px;
+    }
+
+    /* Inner Box for Equipo Shazam 2002 */
+    .n1-team-box {
+      border: 1.5px solid #00f0ff;
+      border-radius: 12px;
+      background: rgba(2, 16, 32, 0.68);
+      padding: 22px 24px 28px 24px;
+      text-align: center;
+      margin-bottom: 26px;
+    }
+
+    .n1-team-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #00f0ff;
+      margin-bottom: 24px;
+    }
+
+    .n1-silhouettes-container {
+      position: relative;
+      width: 100%;
+      height: 210px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .silhouette {
+      position: absolute;
+      width: 94px;
+      height: 94px;
+    }
+
+    .sil-top-left {
+      left: 16%;
+      top: 10px;
+    }
+
+    .sil-top-center {
+      left: 44%;
+      top: 10px;
+    }
+
+    .sil-top-right {
+      left: 72%;
+      top: 10px;
+    }
+
+    .sil-bottom-left {
+      left: 30%;
+      top: 106px;
+    }
+
+    .sil-bottom-right {
+      left: 58%;
+      top: 106px;
+    }
+
+    .sil-svg {
+      width: 100%;
+      height: 100%;
+      filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.85));
+    }
+
+    /* Screen 2 Layout */
+    .n1-s2-layout {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 26px;
+      position: relative;
+    }
+
+    .n1-s2-left-box {
+      position: relative;
+      width: 270px;
+      height: 230px;
+      border: 1.5px solid #00f0ff;
+      border-radius: 12px;
+      background: rgba(2, 16, 32, 0.68);
+      padding: 12px;
+      flex-shrink: 0;
+    }
+
+    .n1-s2-silhouettes-container {
+      position: relative;
+      width: 100%;
+      height: 140px;
+    }
+
+    .sil-mini {
+      position: absolute;
+      width: 46px;
+      height: 46px;
+    }
+
+    .sil-mini-1 {
+      left: 16px;
+      top: 25px;
+    }
+
+    .sil-mini-2 {
+      left: 109px;
+      top: 25px;
+    }
+
+    .sil-mini-3 {
+      left: 202px;
+      top: 25px;
+    }
+
+    .sil-mini-4 {
+      left: 62px;
+      top: 85px;
+    }
+
+    .sil-mini-5 {
+      left: 156px;
+      top: 85px;
+    }
+
+    .sil-mini-2.active {
+      width: 52px;
+      height: 52px;
+      left: 106px;
+      top: 22px;
+    }
+
+    .label-2026 {
+      position: absolute;
+      top: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: #00f0ff;
+      letter-spacing: 0.05em;
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.9);
+    }
+
+    /* Precision Connecting Line SVG */
+    .connecting-line-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 300px;
+      height: 230px;
+      pointer-events: none;
+      overflow: visible;
+      z-index: 5;
+    }
+
+    .n1-s2-photo-box {
+      width: 220px;
+      height: 220px;
+      flex-shrink: 0;
+      border: 2px solid #00f0ff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
+      position: relative;
+      z-index: 2;
+    }
+
+    .avery-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .n1-s2-text-box {
+      flex: 1;
+    }
+
+    .n1-description-s2 {
+      font-size: 1.12rem;
+      line-height: 1.68;
+      color: #00e5ff;
+    }
+
+    .highlight-purple {
+      color: #b545ff;
+      font-weight: 700;
+    }
+
+    .highlight-cyan {
+      color: #00f0ff;
+      font-weight: 700;
+    }
+
+    /* Nucleo Card Footer Controls */
+    .nucleo-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 22px;
+    }
+
+    .pagination-dots {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid rgba(0, 240, 255, 0.5);
+      background: transparent;
+      transition: all 0.3s ease;
+    }
+
+    .dot.active {
+      background: #00f0ff;
+      border-color: #00f0ff;
+      box-shadow: 0 0 14px #00f0ff;
+    }
+
+    .nucleo-next-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(8, 20, 36, 0.94);
+      border: 2px solid #00f0ff;
+      border-radius: 38px;
+      padding: 10px 28px;
+      color: #ffffff;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.02rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+      transition: all 0.3s ease;
+      outline: none;
+    }
+
+    .nucleo-next-btn:hover {
+      background: rgba(12, 28, 48, 0.98);
+      border-color: #ffffff;
+      box-shadow: 0 0 32px rgba(0, 240, 255, 0.85);
+      transform: scale(1.05);
+    }
+
+    /* Nucleo 2 Card Left Position for Viewport Fit (Requirement 1) */
+    .nucleo2-card {
+      left: -280px !important;
+      top: -240px;
+      width: 880px;
+    }
+
+    /* Nucleo 2 Pantalla 1 Interactive Keypad & Cellphone Styles */
+    .n2-p1-container {
+      position: relative;
+      width: 100%;
+    }
+
+    .n2-description {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.05rem;
+      line-height: 1.75;
+      color: #00e5ff;
+      margin-bottom: 22px;
+    }
+
+    .n2-description .highlight-purple {
+      color: #b545ff;
+      font-weight: 700;
+    }
+
+    .n2-interactive-layout {
+      position: relative;
+      width: 100%;
+      height: 270px;
+      margin-top: 18px;
+    }
+
+    /* Overlay SVG Layer for Component-to-Component Connectors */
+    .n2-overlay-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: visible;
+      z-index: 1;
+    }
+
+    .n2-instruction-box {
+      position: absolute;
+      left: 20px;
+      top: 10px;
+      width: 180px;
+      z-index: 2;
+    }
+
+    .n2-instruction-title {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #00f0ff;
+      letter-spacing: 0.04em;
+    }
+
+    .n2-keypad-box {
+      position: absolute;
+      left: 230px;
+      top: 0px;
+      border: 2px solid #00f0ff;
+      border-radius: 14px;
+      background: rgba(2, 14, 28, 0.8);
+      padding: 14px;
+      box-shadow: 0 0 22px rgba(0, 240, 255, 0.35);
+      z-index: 2;
+    }
+
+    .keypad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 52px);
+      gap: 10px;
+    }
+
+    .keypad-btn {
+      width: 52px;
+      height: 52px;
+      border: 1.5px solid #00f0ff;
+      border-radius: 10px;
+      background: rgba(4, 16, 32, 0.85);
+      color: #ffffff;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.25rem;
+      font-weight: 700;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 6px rgba(0, 240, 255, 0.2);
+    }
+
+    .keypad-btn:hover {
+      background: rgba(8, 28, 52, 0.95);
+      border-color: #ffffff;
+      box-shadow: 0 0 14px rgba(0, 240, 255, 0.6);
+      transform: scale(1.05);
+    }
+
+    /* Pressed key visual feedback */
+    .keypad-btn.selected-key {
+      border-color: #00f0ff;
+      background: rgba(0, 240, 255, 0.25);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
+    }
+
+    /* Resolved state active keys */
+    .keypad-btn.active {
+      background: rgba(0, 240, 255, 0.25) !important;
+      color: #ffffff !important;
+      border-color: #00f0ff !important;
+      font-weight: 800 !important;
+      box-shadow: 0 0 14px rgba(0, 240, 255, 0.6) !important;
+    }
+
+    .n2-cellphone-box {
+      position: absolute;
+      left: 558px;
+      top: 92px;
+      z-index: 2;
+    }
+
+    .cellphone-btn {
+      position: relative;
+      width: 135px;
+      height: 86px;
+      border-radius: 24px 24px 12px 12px;
+      border: 1.5px solid rgba(0, 240, 255, 0.25);
+      background: rgba(4, 12, 24, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      outline: none;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 3;
+    }
+
+    .cellphone-btn.disabled {
+      cursor: not-allowed;
+      pointer-events: none;
+      opacity: 0.45;
+      border-color: rgba(0, 240, 255, 0.25);
+      background: rgba(4, 12, 24, 0.45);
+      box-shadow: none;
+    }
+
+    .cellphone-btn.enabled {
+      border-color: #00f0ff;
+      background: rgba(8, 24, 44, 0.95);
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.6);
+      cursor: pointer;
+      pointer-events: auto;
+      opacity: 1;
+    }
+
+    .phone-icon-img {
+      width: 52px;
+      height: auto;
+      object-fit: contain;
+      display: block;
+      pointer-events: none;
+    }
+
+    /* Nucleo 2 Pantalla 2 Carga (3.5s) & Carga Completa Styles */
+    .n2-loading-layout {
+      position: relative;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 30px;
+      padding-top: 10px;
+      min-height: 280px;
+      width: 100%;
+    }
+
+    .n2-loading-left-col {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      max-width: 480px;
+    }
+
+    .n2-loading-indicators {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      padding-left: 10px;
+    }
+
+    .phone-listening-pill {
+      width: 125px;
+      height: 82px;
+      border-radius: 40px;
+      background: #00f0ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.7);
+      flex-shrink: 0;
+    }
+
+    .phone-listening-pill.small {
+      width: 110px;
+      height: 80px;
+      border-radius: 36px;
+    }
+
+    .ring-loader-box {
+      position: relative;
+      width: 78px;
+      height: 78px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .ring-loader-spinner {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2.5px solid rgba(0, 240, 255, 0.2);
+      border-top: 2.5px solid #00f0ff;
+      border-right: 2.5px solid #00f0ff;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+      animation: spinRing 1.2s infinite linear;
+    }
+
+    @keyframes spinRing {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .ring-loader-text {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #00f0ff;
+      letter-spacing: 0.04em;
+      text-shadow: 0 0 8px rgba(0, 240, 255, 0.7);
+    }
+
+    /* Right Side: Feature Phone Outline Illustration — Unified dimensions across all N2 screens */
+    .n2-phone-illustration-box {
+      position: absolute;
+      right: 30px;
+      top: 0px;
+      width: 190px;
+      height: 310px;
+      overflow: visible;
+    }
+
+    /* Chassis-style phone frame: rounded top, flatter base, transparent background and neon borders */
+    .phone-outer-frame {
+      width: 100%;
+      height: 100%;
+      border: 2px solid transparent;
+      border-radius: 24px 24px 12px 12px;
+      background:
+        linear-gradient(transparent, transparent) padding-box,
+        linear-gradient(180deg, #00f0ff 0%, rgba(0, 240, 255, 0.3) 60%, transparent 100%) border-box;
+      background-color: transparent;
+      box-shadow:
+        0 0 28px rgba(0, 240, 255, 0.3),
+        0 -6px 20px rgba(0, 240, 255, 0.25) inset;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: visible;
+      /* Bottom fade dissolves phone into background */
+      -webkit-mask-image: linear-gradient(to bottom, black 72%, transparent 100%);
+      mask-image: linear-gradient(to bottom, black 72%, transparent 100%);
+    }
+
+    .phone-screen-display {
+      width: 100%;
+      height: 148px;
+      border: 2px solid #00f0ff;
+      border-radius: 12px;
+      background: rgba(2, 12, 24, 0.7);
+      box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.2);
+    }
+
+    .phone-keypad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      height: 90px;
+    }
+
+    .phone-key-btn {
+      border: 2px solid #00f0ff;
+      border-radius: 10px;
+      background: rgba(2, 12, 24, 0.6);
+      box-shadow: 0 0 6px rgba(0, 240, 255, 0.25);
+    }
+
+    /* CSS Variables for Nucleus 2 Pantalla 2 (Carga Completa) Component Customization */
+    :root {
+      /* Phone dimensions match Pantalla 1 exactly (190x310) for visual continuity */
+      --n2-p2-phone-width: 190px;
+      --n2-p2-phone-height: 310px;
+      --n2-p2-phone-top: 0px;
+      --n2-p2-phone-right: 30px;
+      /* Screen height proportional to unified phone */
+      --n2-p2-screen-height: 148px;
+      --n2-p2-left-col-max-width: 58%;
+      --n2-p2-left-col-gap: 18px;
+      /* Bubble: sits just below screen, offset left to overlap keypad area */
+      --n2-p2-bubble-top: 142px;
+      --n2-p2-bubble-left: -58px;
+      --n2-p2-bubble-width: 220px;
+      --n2-p2-bubble-font-size: 0.75rem;
+      --n2-p2-play-btn-size: 46px;
+    }
+
+    /* Pantalla 2 Estado 2 (Carga Completa) Result Layout */
+    .n2-result-layout {
+      position: relative;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+      min-height: 310px;
+      padding-top: 5px;
+    }
+
+    .n2-result-left-col {
+      display: flex;
+      flex-direction: column;
+      height: 310px;
+      max-width: var(--n2-p2-left-col-max-width);
+    }
+
+    .n2-result-center-group {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      padding-left: 4px;
+      margin-top: auto;
+      margin-bottom: auto;
+    }
+
+    .n2-sms-arrow-box {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .sms-icon-box {
+      width: 58px;
+      height: 58px;
+      border-radius: 14px;
+      border: 2px solid #00f0ff;
+      background: rgba(4, 16, 32, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 18px rgba(0, 240, 255, 0.45);
+    }
+
+    /* Result phone uses the same base class dimensions — no override needed for size */
+    .n2-phone-illustration-box.result-phone {
+      position: absolute;
+      right: var(--n2-p2-phone-right);
+      top: var(--n2-p2-phone-top);
+      width: var(--n2-p2-phone-width);
+      height: var(--n2-p2-phone-height);
+      overflow: visible;
+    }
+
+    /* Result phone frame keeps chassis style from base, just adjusts screen height */
+    .n2-phone-illustration-box.result-phone .phone-outer-frame {
+      height: 100%;
+      background:
+        linear-gradient(transparent, transparent) padding-box,
+        linear-gradient(180deg, #00f0ff 0%, rgba(0, 240, 255, 0.3) 60%, transparent 100%) border-box;
+      background-color: transparent;
+      overflow: visible;
+      -webkit-mask-image: linear-gradient(to bottom, black 72%, transparent 100%);
+      mask-image: linear-gradient(to bottom, black 72%, transparent 100%);
+    }
+
+    .n2-phone-illustration-box.result-phone .phone-screen-display.result-screen {
+      height: var(--n2-p2-screen-height);
+    }
+
+    .phone-screen-display.result-screen {
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+    }
+
+    .phone-screen-display.result-screen .eminem-cover-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.35s ease, filter 0.35s ease;
+    }
+
+    .phone-screen-display.result-screen:hover .eminem-cover-photo {
+      transform: scale(1.06);
+      filter: brightness(0.85);
+    }
+
+    .eminem-hover-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(2, 12, 24, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      z-index: 4;
+    }
+
+    .phone-screen-display.result-screen:hover .eminem-hover-overlay,
+    .phone-screen-display.result-screen.playing-audio .eminem-hover-overlay {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .eminem-play-btn {
+      width: var(--n2-p2-play-btn-size);
+      height: var(--n2-p2-play-btn-size);
+      border-radius: 50%;
+      background: #00f0ff;
+      border: 2px solid #00f0ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 0 25px #00f0ff, inset 0 0 10px rgba(255, 255, 255, 0.8);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      outline: none;
+    }
+
+    .eminem-play-btn:hover {
+      transform: scale(1.12);
+      box-shadow: 0 0 35px #00f0ff, 0 0 15px #ffffff;
+    }
+
+    /* Speech Bubble / Result Card Pill Overlapping Phone Screen & Keypad on Left */
+    .n2-song-bubble-pill {
+      position: absolute;
+      top: var(--n2-p2-bubble-top);
+      left: var(--n2-p2-bubble-left);
+      width: var(--n2-p2-bubble-width);
+      background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 100%);
+      border: 1.5px solid rgba(0, 240, 255, 0.7);
+      border-radius: 14px;
+      padding: 9px 12px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: var(--n2-p2-bubble-font-size);
+      font-weight: 600;
+      color: #0f172a;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.45), 0 8px 20px rgba(0, 0, 0, 0.5);
+      z-index: 10;
+      line-height: 1.4;
+      pointer-events: none;
+    }
+
+    .n2-song-bubble-pill .purple-song-title {
+      color: #6100ff;
+      font-weight: 700;
+    }
+
+    .shazam-count-line {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #00e5ff;
+      opacity: 0.9;
+    }
+
+    .peak-dot.p1 {
+      left: 30%;
+      top: 40%;
+    }
+
+    .peak-dot.p2 {
+      left: 60%;
+      top: 25%;
+      background: #b545ff;
+      box-shadow: 0 0 10px #b545ff;
+    }
+
+    .peak-dot.p3 {
+      left: 80%;
+      top: 60%;
+    }
+
+    .hash-lines-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Nucleo 3 & 4 Purple Theme & Layout Styles */
+    .nucleo3-card,
+    .nucleo4-card {
+      left: -380px !important;
+      top: -270px;
+      width: 880px;
+      min-height: 590px;
+      border: 2px solid #5E00FF !important;
+      box-shadow: 0 0 45px rgba(94, 0, 255, 0.35), inset 0 0 25px rgba(94, 0, 255, 0.15) !important;
+    }
+
+    .purple-title {
+      color: #5E00FF !important;
+    }
+
+    .purple-line {
+      background: rgba(94, 0, 255, 0.5) !important;
+      box-shadow: 0 0 12px rgba(94, 0, 255, 0.6) !important;
+    }
+
+    .purple-btn {
+      border-color: #5E00FF !important;
+      box-shadow: 0 0 20px rgba(94, 0, 255, 0.4) !important;
+    }
+
+    .purple-btn:hover {
+      border-color: #ffffff !important;
+      box-shadow: 0 0 32px rgba(94, 0, 255, 0.85) !important;
+    }
+
+    .purple-text {
+      color: #5E00FF !important;
+    }
+
+    .n3-description,
+    .n4-description {
+      font-size: 1.18rem;
+      line-height: 1.7;
+      color: #8DAFFF;
+      margin-bottom: 26px;
+    }
+
+    /* Pantalla 1 Layout — Celular centrado */
+    .n3-p1-layout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 0 20px 0;
+    }
+
+    /* Celular asset — imagen flotante interactiva, desplazada 5% más a la izquierda y 10% más arriba */
+    .n3-celular-frame {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
+      overflow: visible;
+      margin-left: -80px;
+      margin-top: -15px;
+      cursor: pointer;
+    }
+
+    .n3-celular-img {
+      display: block;
+      max-width: 252px;
+      max-height: 312px;
+      width: auto;
+      height: auto;
+      border-radius: 0;
+      object-fit: contain;
+      filter: drop-shadow(0 0 28px rgba(94, 0, 255, 0.5)) drop-shadow(0 0 60px rgba(94, 0, 255, 0.2));
+      cursor: pointer;
+      transition: transform 0.3s ease, filter 0.3s ease;
+      transform-origin: center center;
+    }
+
+    .n3-celular-frame:hover .n3-celular-img,
+    .n3-celular-img:hover {
+      transform: scale(1.1);
+      filter: drop-shadow(0 0 38px rgba(94, 0, 255, 0.8)) drop-shadow(0 0 75px rgba(94, 0, 255, 0.35));
+    }
+
+    .n3-phone-frame {
+      position: relative;
+      width: 170px;
+      height: 250px;
+      border: 2.5px solid #5E00FF;
+      border-radius: 28px;
+      background: rgba(3, 10, 24, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px rgba(94, 0, 255, 0.4);
+    }
+
+    .n3-phone-frame.small-phone {
+      width: 140px;
+      height: 210px;
+      border-radius: 24px;
+      flex-shrink: 0;
+    }
+
+    .n3-shazam-app-btn {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      outline: none;
+      transition: transform 0.3s ease;
+    }
+
+    .n3-shazam-app-btn:hover {
+      transform: scale(1.12);
+    }
+
+    .n3-shazam-logo-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      box-shadow: 0 0 22px rgba(0, 240, 255, 0.8);
+    }
+
+    .ear-icon-circle {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: 2px solid #00f0ff;
+      background: rgba(4, 16, 32, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.5);
+    }
+
+    /* Pantallas 2, 3 y 4 — Espectrograma, Picos y Huella centrados sin bordes */
+    .n3-p2-layout,
+    .n3-p3-layout,
+    .n3-p4-layout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 320px;
+      padding: 15px 0 25px 0;
+      width: 100%;
+    }
+
+    .n3-espectrograma-img,
+    .n3-picos-img,
+    .n3-huella-img {
+      display: block;
+      max-width: 100%;
+      max-height: 310px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      filter: drop-shadow(0 0 26px rgba(94, 0, 255, 0.45));
+    }
+
+    /* Pantalla 2 — Wrapper y Popover Tooltip del Espectrograma Real */
+    .n3-espectrograma-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: default;
+    }
+
+    /* Hotspot transparente centrado exclusivamente sobre la gráfica del espectrograma */
+    .n3-espectrograma-hotspot {
+      position: absolute;
+      left: 28%;
+      right: 0;
+      top: 36px;
+      bottom: 90px;
+      background: transparent;
+      cursor: pointer;
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    /* Línea de escaneo animada — simula lectura del espectrograma */
+    .n3-scan-line {
+      position: absolute;
+      top: -5px;
+      left: 0;
+      width: 2px;
+      height: 100%;
+      background: linear-gradient(to bottom, transparent 0%, #b545ff 20%, #7b00ff 50%, #b545ff 80%, transparent 100%);
+      pointer-events: none;
+      z-index: 11;
+      animation: scanSweep 3.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    }
+
+    @keyframes scanSweep {
+      0% {
+        left: 0%;
+        opacity: 0.2;
+      }
+
+      5% {
+        opacity: 1;
+      }
+
+      95% {
+        opacity: 1;
+      }
+
+      100% {
+        left: calc(100% - 2px);
+        opacity: 0.2;
+      }
+    }
+
+    /* Cartel indicador de interacción — píldora blanca flotante */
+    .n3-espectrograma-hint {
+      position: absolute;
+      right: 8px;
+      bottom: 92px;
+      background: #ffffff;
+      color: #1a0050;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      padding: 5px 11px;
+      border-radius: 20px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 15;
+      box-shadow: 0 2px 12px rgba(94, 0, 255, 0.25);
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+      /* Animación sutil de pulsación para llamar atención */
+      animation: hintPulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes hintPulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      50% {
+        opacity: 0.7;
+        transform: translateY(-2px);
+      }
+    }
+
+    .n3-espectrograma-hint.dismissed {
+      opacity: 0;
+      visibility: hidden;
+      animation: none;
+    }
+
+    .n3-espectrograma-img {
+      transition: filter 0.3s ease;
+    }
+
+    .n3-espectrograma-wrapper:has(.n3-espectrograma-hotspot:hover) .n3-espectrograma-img {
+      filter: drop-shadow(0 0 34px rgba(94, 0, 255, 0.75));
+    }
+
+    .n3-espectrograma-popover {
+      position: absolute;
+      top: 15%;
+      left: 65%;
+      transform: translate(-50%, -100%) scale(0.95);
+      width: clamp(240px, 20vw, 340px);
+      max-width: 22vw;
+      max-height: 22vh;
+      border: 1.5px solid #5E00FF;
+      border-radius: 12px;
+      background: rgba(3, 10, 24, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.75), 0 0 24px rgba(94, 0, 255, 0.5), inset 0 0 12px rgba(94, 0, 255, 0.2);
+      padding: 6px;
+      pointer-events: none;
+      z-index: 120;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s ease;
+      overflow: hidden;
+    }
+
+    .n3-espectrograma-hotspot:hover~.n3-espectrograma-popover,
+    .n3-espectrograma-popover.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, -100%) scale(1);
+    }
+
+    .n3-popover-real-img {
+      width: 100%;
+      height: auto;
+      max-height: calc(22vh - 12px);
+      display: block;
+      border-radius: 8px;
+      object-fit: contain;
+    }
+
+    /* Pantalla 5 — Búsqueda en Base de Datos & Resultado */
+    .n3-p5-layout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 48px;
+      min-height: 320px;
+      padding: 15px 0 25px 0;
+      width: 100%;
+      transform: translateX(40px);
+    }
+
+    .n3-spectrum-box,
+    .n3-peaks-container,
+    .n3-fingerprint-overlay-container {
+      position: relative;
+      flex: 1;
+      height: 180px;
+      border: 1.5px solid rgba(94, 0, 255, 0.4);
+      border-radius: 14px;
+      background: rgba(2, 10, 20, 0.7);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .spectrum-svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .dark-blur-overlay-band {
+      position: absolute;
+      width: 100%;
+      height: 70px;
+      background: rgba(2, 8, 18, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 2;
+    }
+
+    /* Peak Highlight Boxes */
+    .peak-highlight-box {
+      position: absolute;
+      width: 50px;
+      height: 80px;
+      border: 2px solid #5E00FF;
+      border-radius: 10px;
+      background: rgba(94, 0, 255, 0.15);
+      box-shadow: 0 0 15px rgba(94, 0, 255, 0.6);
+      z-index: 3;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 6px;
+    }
+
+    .peak-highlight-box.p1 {
+      left: 15%;
+      top: 15px;
+    }
+
+    .peak-highlight-box.p2 {
+      left: 35%;
+      top: 85px;
+    }
+
+    .peak-highlight-box.p3 {
+      left: 60%;
+      top: 15px;
+    }
+
+    .peak-highlight-box.p4 {
+      left: 80%;
+      top: 25px;
+    }
+
+    .peak-highlight-box.opacity-50 {
+      opacity: 0.5;
+    }
+
+    .peak-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      width: 100%;
+      height: 100%;
+    }
+
+    .peak-bars .bar {
+      flex: 1;
+      background: #00f0ff;
+      border-radius: 2px;
+    }
+
+    .bar.h-40 {
+      height: 40%;
+    }
+
+    .bar.h-50 {
+      height: 50%;
+    }
+
+    .bar.h-60 {
+      height: 60%;
+    }
+
+    .bar.h-65 {
+      height: 65%;
+    }
+
+    .bar.h-70 {
+      height: 70%;
+    }
+
+    .bar.h-75 {
+      height: 75%;
+    }
+
+    .bar.h-80 {
+      height: 80%;
+    }
+
+    .bar.h-85 {
+      height: 85%;
+    }
+
+    .bar.h-90 {
+      height: 90%;
+    }
+
+    .bar.h-95 {
+      height: 95%;
+    }
+
+    .bar.h-100 {
+      height: 100%;
+    }
+
+    /* Central Fingerprint Circle */
+    .central-fingerprint-circle {
+      position: relative;
+      z-index: 5;
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      border: 2px solid #5E00FF;
+      background: rgba(3, 10, 24, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 35px rgba(94, 0, 255, 0.8);
+    }
+
+    /* CSS Variables for Nucleus 3 Pantalla 5 (Prayer in C) Component Customization */
+    :root {
+      --n3-p5-layout-gap: 48px;
+      --n3-p5-layout-offset-x: 40px;
+      --n3-p5-huella-max-height: 185px;
+      --n3-p5-album-frame-size: 180px;
+      --n3-p5-play-btn-size: 56px;
+      --n3-p5-title-font-size: 0.96rem;
+      --n3-p5-count-font-size: 0.90rem;
+    }
+
+    /* Pantalla 5 — Búsqueda en Base de Datos & Resultado (Prayer in C) */
+    .n3-p5-layout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--n3-p5-layout-gap);
+      min-height: 320px;
+      padding: 15px 0 25px 0;
+      width: 100%;
+      transform: translateX(var(--n3-p5-layout-offset-x));
+    }
+
+    .n3-huellaflecha-frame {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .n3-huellaflecha-img {
+      display: block;
+      max-height: var(--n3-p5-huella-max-height);
+      width: auto;
+      object-fit: contain;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+      filter: drop-shadow(0 0 24px rgba(94, 0, 255, 0.45));
+    }
+
+    .n3-song-card-box {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 14px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .robin-album-frame {
+      position: relative;
+      width: var(--n3-p5-album-frame-size);
+      height: var(--n3-p5-album-frame-size);
+      border: 2px solid #5E00FF;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 0 25px rgba(94, 0, 255, 0.6);
+      cursor: pointer;
+    }
+
+    .robin-cover-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.35s ease, filter 0.35s ease;
+    }
+
+    .robin-album-frame:hover .robin-cover-photo {
+      transform: scale(1.06);
+      filter: brightness(0.85);
+    }
+
+    .prayer-hover-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(3, 10, 24, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      z-index: 4;
+    }
+
+    .robin-album-frame:hover .prayer-hover-overlay,
+    .n3-song-card-box.playing-audio .prayer-hover-overlay {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .prayer-play-btn {
+      width: var(--n3-p5-play-btn-size);
+      height: var(--n3-p5-play-btn-size);
+      border-radius: 50%;
+      background: #5E00FF;
+      border: 2px solid #5E00FF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 0 28px #5E00FF, inset 0 0 10px rgba(255, 255, 255, 0.8);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      outline: none;
+    }
+
+    .prayer-play-btn:hover {
+      transform: scale(1.12);
+      box-shadow: 0 0 38px #5E00FF, 0 0 15px #ffffff;
+    }
+
+    .song-details-text {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-family: 'Roboto Mono', monospace;
+    }
+
+    .song-title-line {
+      color: #8DAFFF !important;
+      font-size: var(--n3-p5-title-font-size);
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .shazam-count-line {
+      color: #8DAFFF !important;
+      font-size: var(--n3-p5-count-font-size);
+      line-height: 1.4;
+      opacity: 0.92;
+    }
+
+    /* Pantalla 6 — Comparativas: Antes vs Hoy */
+    .n3-p6-layout {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 20px 0 15px 0;
+      min-height: 380px;
+      position: relative;
+    }
+
+    .p6-graph-container {
+      position: relative;
+    }
+
+    /* Pantalla 6 Radar Graph Interactive Node Tooltip */
+    .graph-tooltip {
+      position: absolute;
+      pointer-events: none;
+      z-index: 25;
+      padding: 7px 15px;
+      border-radius: 18px;
+      background: rgba(2, 10, 24, 0.95);
+      backdrop-filter: blur(10px);
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 600;
+      white-space: nowrap;
+      transform: translate(-50%, -100%) translateY(-10px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+    }
+
+    .graph-tooltip::after {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+    }
+
+    .graph-tooltip.cyan-theme {
+      border: 1.5px solid #00f0ff;
+      color: #00f0ff;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.45), 0 4px 18px rgba(0, 0, 0, 0.7);
+    }
+
+    .graph-tooltip.cyan-theme::after {
+      border-top: 6px solid #00f0ff;
+    }
+
+    .graph-tooltip.purple-theme {
+      border: 1.5px solid #818cf8;
+      color: #818cf8;
+      box-shadow: 0 0 20px rgba(129, 140, 248, 0.45), 0 4px 18px rgba(0, 0, 0, 0.7);
+    }
+
+    .graph-tooltip.purple-theme::after {
+      border-top: 6px solid #818cf8;
+    }
+
+    .graph-visible-dot {
+      transition: r 0.2s ease, fill 0.2s ease;
+    }
+
+    .p6-legend-box {
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      width: 220px;
+      flex-shrink: 0;
+      padding-top: 30px;
+      padding-left: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .legend-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .cyan-dot {
+      background: #00f0ff;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.85);
+    }
+
+    .purple-dot {
+      background: #7d8cff;
+      box-shadow: 0 0 12px rgba(125, 140, 255, 0.85);
+    }
+
+    .legend-label {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: #ffffff;
+      letter-spacing: 0.02em;
+    }
+
+    .p6-graph-container {
+      position: relative;
+      width: 530px;
+      height: 350px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .radar-triangle-svg {
+      width: 320px;
+      height: 230px;
+      display: block;
+      margin: 25px auto 0 auto;
+      overflow: visible;
+      filter: drop-shadow(0 0 16px rgba(94, 0, 255, 0.35));
+    }
+
+    /* Posicionamiento y diseño de los textos de datos en los 3 ejes */
+    .vertex-block {
+      position: absolute;
+      z-index: 10;
+      font-family: 'Roboto Mono', monospace;
+      line-height: 1.45;
+      pointer-events: auto;
+    }
+
+    .vertex-block.v-top {
+      top: 0px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .vertex-block.v-left {
+      bottom: 5px;
+      left: 0px;
+      text-align: left;
+    }
+
+    .vertex-block.v-right {
+      bottom: 5px;
+      right: 0px;
+      text-align: left;
+    }
+
+    .vertex-title {
+      font-size: 0.93rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 5px;
+      letter-spacing: 0.03em;
+      text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+    }
+
+    .val-cyan {
+      color: #00f0ff;
+      font-size: 0.86rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-bottom: 2px;
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+    }
+
+    .val-purple {
+      color: #7d8cff;
+      font-size: 0.86rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 10px rgba(125, 140, 255, 0.4);
+    }
+
+    /* Node 3 & Node 4 Purple Overview Buttons */
+    .overview-node-btn.purple-node-btn {
+      border-color: #5E00FF !important;
+      box-shadow: 0 0 16px rgba(94, 0, 255, 0.4), inset 0 0 10px rgba(94, 0, 255, 0.15) !important;
+    }
+
+    .overview-node-btn.purple-node-btn .btn-arrow {
+      color: #5E00FF !important;
+    }
+
+    .overview-node-btn.purple-node-btn:hover {
+      border-color: #ffffff !important;
+      box-shadow: 0 0 28px rgba(94, 0, 255, 0.8), inset 0 0 16px rgba(94, 0, 255, 0.3) !important;
+    }
+
+    /* Nucleo 4 Layouts & Styles */
+    .n4-p1-layout,
+    .n4-p2-layout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 350px;
+      padding: 10px 0 20px 0;
+      width: 100%;
+    }
+
+    .n4-record-img {
+      display: block;
+      max-width: 100%;
+      max-height: 330px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+      filter: drop-shadow(0 0 26px rgba(94, 0, 255, 0.45));
+    }
+
+    /* Botón Conclusión deshabilitado / inactivo */
+    .nucleo-next-btn.conclusion-btn[disabled] {
+      opacity: 0.45 !important;
+      cursor: not-allowed !important;
+      pointer-events: none !important;
+      filter: grayscale(0.5);
+      border-color: rgba(94, 0, 255, 0.4) !important;
+      box-shadow: none !important;
+    }
+
+    /* Nucleo 4 Full Component Image & Interactive Overlay Styles */
+    .nucleo4-card {
+      left: -380px !important;
+      top: -270px;
+      width: 880px;
+      min-height: 560px;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+    }
+
+    .n4-component-container {
+      position: relative;
+      width: 100%;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .n4-component-img {
+      position: relative !important;
+      z-index: 1 !important;
+      width: 100%;
+      height: auto;
+      display: block;
+      pointer-events: none !important;
+      user-select: none;
+      -webkit-user-drag: none;
+      -webkit-user-select: none;
+      border-radius: 16px;
+      filter: drop-shadow(0 0 25px rgba(94, 0, 255, 0.45));
+    }
+
+    /* Base Music Overlay Style */
+    .n4-music-overlay {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 20;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      pointer-events: auto;
+      padding: 0;
+      outline: none;
+    }
+
+    /* Individual Song Overlay Positions (1:1 aligned over album covers in PNG) */
+    .n4-music-eminem-p1 {
+      left: 10.16%;
+      top: 59.65%;
+      width: 6.5%;
+      height: 10.0%;
+    }
+
+    .n4-music-tiktok-p1 {
+      left: 62.5%;
+      top: 29.65%;
+      width: 6.5%;
+      height: 10.0%;
+    }
+
+    .n4-music-eminem-p2 {
+      left: 10.18%;
+      top: 59.13%;
+      width: 6.5%;
+      height: 10.0%;
+    }
+
+    .n4-music-tiktok-p2 {
+      left: 30.8%;
+      top: 59.16%;
+      width: 6.5%;
+      height: 10.0%;
+    }
+
+    .n4-music-gotye-p2 {
+      left: 49.5%;
+      top: 39.58%;
+      width: 6.5%;
+      height: 10.0%;
+    }
+
+    .n4-music-prayer-p2 {
+      left: 67.9%;
+      top: 15.8%;
+      width: 6.5%;
+      height: 10.0%;
+    }
+
+    /* Play Icon Circle */
+    .n4-play-btn-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(94, 0, 255, 0.85);
+      border: 2px solid #a855f7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px #5E00FF, inset 0 0 8px rgba(255, 255, 255, 0.7);
+      opacity: 0.7;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .n4-music-overlay:hover .n4-play-btn-circle,
+    .n4-music-overlay.playing-audio .n4-play-btn-circle {
+      opacity: 1;
+      transform: scale(1.15);
+      background: #a855f7;
+      border-color: #ffffff;
+      box-shadow: 0 0 25px #a855f7, 0 0 10px #ffffff;
+    }
+
+    .n4-music-overlay.playing-audio {
+      box-shadow: 0 0 18px rgba(168, 85, 247, 0.85);
+    }
+
+    /* Visible Buttons for Nucleo 4 (Pantalla 1 & Pantalla 2) */
+    .n4-btn-overlay {
+      position: absolute !important;
+      cursor: pointer !important;
+      z-index: 50 !important;
+      pointer-events: auto !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+      padding: 8px 20px !important;
+      border-radius: 9999px !important;
+      font-family: 'Roboto Mono', 'SF Pro Display', monospace, sans-serif !important;
+      font-size: 0.85rem !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.08em !important;
+      color: #ffffff !important;
+      background: rgba(8, 20, 36, 0.94) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      border: 2px solid #5E00FF !important;
+      box-shadow: 0 0 18px rgba(94, 0, 255, 0.4), inset 0 0 8px rgba(94, 0, 255, 0.2) !important;
+      outline: none !important;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      text-transform: uppercase !important;
+      box-sizing: border-box !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+
+    .n4-btn-overlay:hover {
+      background: rgba(94, 0, 255, 0.3) !important;
+      border-color: #ffffff !important;
+      box-shadow: 0 0 28px rgba(168, 85, 247, 0.85), inset 0 0 12px rgba(168, 85, 247, 0.3) !important;
+      transform: scale(1.05);
+    }
+
+    .n4-btn-overlay:active {
+      transform: scale(0.98);
+    }
+
+    .n4-btn-avanzar-p1 {
+      left: 78.07%;
+      top: 83.78%;
+      min-width: 130px;
+      height: 38px;
+    }
+
+    .n4-btn-volver-p2 {
+      left: 8.5%;
+      top: 80.5%;
+      min-width: 120px;
+      height: 38px;
+    }
+
+    .n4-btn-conclusion-p2 {
+      left: 73.62%;
+      top: 80.5%;
+      min-width: 155px;
+      height: 38px;
+    }
+
+    /* Conclusion UI Component Styles */
+    .conclusion-component-container {
+      position: relative !important;
+      width: 100%;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .conclusion-component-img {
+      position: relative !important;
+      z-index: 1 !important;
+      width: 100%;
+      height: auto;
+      display: block;
+      pointer-events: none !important;
+      user-select: none;
+      -webkit-user-drag: none;
+      -webkit-user-select: none;
+      border-radius: 16px;
+      filter: drop-shadow(0 0 25px rgba(94, 0, 255, 0.45));
+    }
+
+    /* Unified Neon Action Buttons for Conclusion Screens (Pantalla 1 & Pantalla 2) */
+    .conclusion-nav-btn {
+      position: absolute !important;
+      z-index: 60 !important;
+      pointer-events: auto !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+      padding: 10px 22px !important;
+      height: 42px !important;
+      box-sizing: border-box !important;
+      border-radius: 9999px !important;
+      font-family: 'Roboto Mono', 'SF Pro Display', monospace, sans-serif !important;
+      font-size: 0.85rem !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.08em !important;
+      color: #ffffff !important;
+      background: rgba(8, 16, 32, 0.94) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      cursor: pointer !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      text-transform: uppercase !important;
+      outline: none !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+
+    /* Pantalla 1: Siguiente (Abajo a la derecha) */
+    .conclusion-btn-siguiente {
+      bottom: 26px !important;
+      right: 32px !important;
+      border: 1.5px solid rgba(0, 240, 255, 0.85) !important;
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.45), inset 0 0 8px rgba(0, 240, 255, 0.2) !important;
+    }
+
+    .conclusion-btn-siguiente:hover {
+      background: rgba(0, 240, 255, 0.2) !important;
+      border-color: #00f0ff !important;
+      box-shadow: 0 0 24px rgba(0, 240, 255, 0.75), inset 0 0 12px rgba(0, 240, 255, 0.3) !important;
+      transform: translateY(-2px);
+    }
+
+    /* Pantalla 2: Volver (Abajo a la izquierda) */
+    .conclusion-btn-volver {
+      bottom: 26px !important;
+      left: 32px !important;
+      border: 1.5px solid rgba(168, 85, 247, 0.85) !important;
+      box-shadow: 0 0 16px rgba(168, 85, 247, 0.45), inset 0 0 8px rgba(168, 85, 247, 0.2) !important;
+    }
+
+    .conclusion-btn-volver:hover {
+      background: rgba(168, 85, 247, 0.2) !important;
+      border-color: #c084fc !important;
+      box-shadow: 0 0 24px rgba(168, 85, 247, 0.75), inset 0 0 12px rgba(168, 85, 247, 0.3) !important;
+      transform: translateY(-2px);
+    }
+
+    /* Pantalla 2: Finalizar (Abajo a la derecha) */
+    .conclusion-btn-finalizar {
+      bottom: 26px !important;
+      right: 32px !important;
+      border: 1.5px solid rgba(0, 240, 255, 0.85) !important;
+      background: linear-gradient(135deg, rgba(8, 16, 32, 0.95), rgba(94, 0, 255, 0.45)) !important;
+      box-shadow: 0 0 18px rgba(0, 240, 255, 0.5), inset 0 0 10px rgba(0, 240, 255, 0.2) !important;
+    }
+
+    .conclusion-btn-finalizar:hover {
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.25), rgba(168, 85, 247, 0.45)) !important;
+      border-color: #00f0ff !important;
+      box-shadow: 0 0 26px rgba(0, 240, 255, 0.8), inset 0 0 14px rgba(0, 240, 255, 0.35) !important;
+      transform: translateY(-2px);
+    }
+
+    .conclusion-nav-btn:active {
+      transform: translateY(1px) scale(0.98);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <!-- 1. Start Screen Overlay (#startScreen) -->
+    <div id="startScreen">
+      <div class="start-content">
+        <h1 class="start-title">¡Esto me suena!</h1>
+        <h2 class="start-subtitle">Shazam, origen y <span class="accent-purple">actualidad</span></h2>
+        <div class="start-divider"></div>
+        <p class="start-description">
+          A todos nos habrá pasado de escuchar por la radio una canción que nos suena pero no logramos identificar. Para
+          solucionar este problema, intelectuales británicos crearon “Shazam”.Pero la pregunta es: ¿Cómo funciona
+          Shazam? Para esto necesitamos analizar sus orígenes y su estado actual.
+        </p>
+        <button id="startCTA" class="start-cta-btn">
+          <span class="cta-text">COMENZAR</span>
+          <img src="references/menu_inicio/Shazam_Logo.png" alt="Shazam Logo" class="cta-logo" />
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. OVERVIEW HTML/CSS Interface Overlay (#overviewUI) -->
+    <div id="overviewUI" class="hidden">
+      <!-- Node 0 Label Pill Card (ORÍGENES ->) -->
+      <div id="overviewNodeAnchor0" class="overview-node-card">
+        <button id="overviewNode0Btn" class="overview-node-btn" data-node-index="0">
+          <span class="btn-text">ORÍGENES</span>
+          <svg class="btn-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Node 1 Label Pill Card (¿CÓMO FUNCIONABA? ->) -->
+      <div id="overviewNodeAnchor1" class="overview-node-card">
+        <button id="overviewNode1Btn" class="overview-node-btn" data-node-index="1">
+          <span class="btn-text">¿CÓMO FUNCIONABA?</span>
+          <svg class="btn-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Node 2 Label Pill Card (¿COMO FUNCIONA? ->) -->
+      <div id="overviewNodeAnchor2" class="overview-node-card">
+        <button id="overviewNode2Btn" class="overview-node-btn" data-node-index="2">
+          <span class="btn-text">¿COMO FUNCIONA?</span>
+          <svg class="btn-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Node 3 Label Pill Card (RECORDS SHAZAMS ->) -->
+      <div id="overviewNodeAnchor3" class="overview-node-card">
+        <button id="overviewNode3Btn" class="overview-node-btn" data-node-index="3">
+          <span class="btn-text">RECORDS SHAZAMS</span>
+          <svg class="btn-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Bottom Header Section (Title & Subtitle) -->
+      <div class="overview-bottom-header">
+        <h1 class="overview-title">¡Esto me suena!</h1>
+        <h2 class="overview-subtitle">Shazam, origen y <span class="accent-purple">actualidad</span></h2>
+      </div>
+    </div>
+
+    <!-- 2. World-Space HTML Anchors Overlay Layer (#anchors-layer) -->
+    <div id="anchors-layer"></div>
+
+    <!-- 3. Conclusion Right-Side Circular CTA (#conclusionCTA) -->
+    <div id="conclusionCTA" class="disabled" title="CONCLUSIÓN">
+      <div class="cta-inner-dot"></div>
+    </div>
+
+    <!-- 4. Conclusion Translucent Panel (#conclusionPanel) -->
+    <div id="conclusionPanel">
+      <div class="panel-header">
+        <div
+          style="font-family: 'Space Grotesk', sans-serif; font-size: 0.9rem; letter-spacing: 0.15em; color: #00e5ff; text-transform: uppercase;">
+          CONCLUSIÓN DEL ESTUDIO
+        </div>
+        <button id="panelCloseBtn" class="panel-close-btn">&times;</button>
+      </div>
+
+      <!-- Structural Anchor for Future Content Overlay -->
+      <div id="conclusionContentAnchor"></div>
+    </div>
+  </div>
+
+  <!-- Application Script Entry Point -->
+  <script type="module" src="./src/main.js"></script>
+</body>
+
+</html>
